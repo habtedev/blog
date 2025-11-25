@@ -6,6 +6,18 @@ const HttpError = require('../../utils/httpError');
 //crete a new blog post
 const createPost = async (data) => {
 	try {
+		// Handle author: accept either ObjectId string or a plain name.
+		if (data && data.author) {
+			// if provided author looks like an ObjectId, keep it; otherwise treat it as authorName
+			if (!mongoose.Types.ObjectId.isValid(String(data.author))) {
+				data.authorName = String(data.author);
+				data.author = null;
+			}
+		}
+		// If status is provided, ensure `published` boolean reflects it.
+		if (data && data.status) {
+			data.published = data.status === 'published';
+		}
 		const post = new Blog(data);
 		const saved = await post.save();
 		logger.info('Created post', { id: saved._id });
@@ -46,6 +58,17 @@ const updatePost = async (id, data) => {
 		if (!mongoose.Types.ObjectId.isValid(id)) {
 			throw new HttpError(400, 'Invalid post id');
 		}
+		// If author is provided as a plain string (not an ObjectId), treat it as authorName
+		if (data && data.author) {
+			if (!mongoose.Types.ObjectId.isValid(String(data.author))) {
+				data.authorName = String(data.author);
+				data.author = null;
+			}
+		}
+		// If status is provided in update, keep `published` consistent.
+		if (data && data.status) {
+			data.published = data.status === 'published';
+		}
 		const updated = await Blog.findByIdAndUpdate(id, data, { new: true, runValidators: true }).exec();
 		logger.info('Updated post', { id });
 		return updated;
@@ -70,6 +93,29 @@ const deletePost = async (id) => {
 	}
 };
 
+// change only status (and keep published flag consistent)
+const changePostStatus = async (id, status) => {
+	try {
+		if (!mongoose.Types.ObjectId.isValid(id)) {
+			throw new HttpError(400, 'Invalid post id');
+		}
+		const data = { status };
+		data.published = status === 'published';
+		// set or clear publishedAt when status changes
+		if (status === 'published') {
+			data.publishedAt = new Date();
+		} else {
+			data.publishedAt = null;
+		}
+		const updated = await Blog.findByIdAndUpdate(id, data, { new: true, runValidators: true }).exec();
+		logger.info('Changed post status', { id, status });
+		return updated;
+	} catch (err) {
+		logger.error('changePostStatus error', { id, err });
+		throw err;
+	}
+};
+
 
 // exporting the function 
 module.exports = {
@@ -78,4 +124,5 @@ module.exports = {
 	getPostById,
 	updatePost,
 	deletePost,
+  changePostStatus,
 };

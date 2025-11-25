@@ -3,12 +3,14 @@ const router = express.Router();
 const controller = require('../domains/blog/blog.controller');
 const { createSchema, updateSchema } = require('../domains/blog/blog.validation');
 const validate = require('../middlewares/validate');
+const { statusSchema } = require('../domains/blog/blog.validation');
 
 // Blog routes (mounted under /api in routes/index.js)
 router.get('/', controller.list);
 router.post('/', validate(createSchema), controller.create);
 router.get('/:id', controller.getById);
 router.put('/:id', validate(updateSchema), controller.update);
+router.patch('/:id/status', validate(statusSchema), controller.changeStatus);
 router.delete('/:id', controller.remove);
 
 module.exports = router;

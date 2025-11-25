@@ -19,7 +19,7 @@ const create = async (req, res, next) => {
 };
 
 
-//
+// list post with pagination
 const list = async (req, res, next) => {
 	try {
 		// Ensure pagination query params are numbers
@@ -29,8 +29,14 @@ const list = async (req, res, next) => {
 		const safeSkip = Number.isNaN(skipNum) ? 0 : Math.max(0, skipNum);
 		const safeLimit = Number.isNaN(limitNum) ? 10 : Math.min(100, Math.max(1, limitNum));
 
-		logger.info('list request', { skip: safeSkip, limit: safeLimit });
-		const posts = await service.getPosts({ skip: safeSkip, limit: safeLimit });
+		// Support filtering by status: draft | published | archived | all
+		const { status = 'published' } = req.query; // default return only published posts
+		const filter = {};
+		if (status && status !== 'all') {
+			filter.status = status;
+		}
+		logger.info('list request', { skip: safeSkip, limit: safeLimit, status });
+		const posts = await service.getPosts({ filter, skip: safeSkip, limit: safeLimit });
 		return res.json({ message: 'Posts retrieved', data: posts });
 	} catch (err) {
 		logger.error('list handler error', err);
@@ -38,6 +44,7 @@ const list = async (req, res, next) => {
 	}
 };
 
+// get post by ID
 const getById = async (req, res, next) => {
 	try {
 		const { id } = req.params;
@@ -55,11 +62,31 @@ const update = async (req, res, next) => {
 	try {
 		const { id } = req.params;
 		logger.info('update request', { id });
+		// Prevent changing publish status via the generic update route.
+		if (req.body && ('status' in req.body || 'published' in req.body || 'publishedAt' in req.body)) {
+			delete req.body.status;
+			delete req.body.published;
+			delete req.body.publishedAt;
+		}
 		const updated = await service.updatePost(id, req.body);
 		if (!updated) throw new HttpError(404, 'Post not found');
 		return res.json({ message: 'Post updated', data: updated });
 	} catch (err) {
 		logger.error('update handler error', err);
+		return next(err);
+	}
+};
+
+const changeStatus = async (req, res, next) => {
+	try {
+		const { id } = req.params;
+		const { status } = req.body;
+		logger.info('changeStatus request', { id, status });
+		const updated = await service.changePostStatus(id, status);
+		if (!updated) throw new HttpError(404, 'Post not found');
+		return res.json({ message: `Post status updated to ${status}`, data: updated });
+	} catch (err) {
+		logger.error('changeStatus handler error', err);
 		return next(err);
 	}
 };
@@ -82,5 +109,6 @@ module.exports = {
 	list,
 	getById,
 	update,
+	changeStatus,
 	remove,
 };

@@ -11,6 +11,10 @@ const BlogSchema = new Schema(
 		authorName: { type: String, default: 'Anonymous' },
 		tags: { type: [String], default: [] },
 		published: { type: Boolean, default: false },
+		// status: draft | published | archived
+		status: { type: String, enum: ['draft', 'published', 'archived'], default: 'draft' },
+		// When the post was published (set when status transitions to 'published')
+		publishedAt: { type: Date, default: null },
 	},
 	{ timestamps: true }
 );
