@@ -65,10 +65,50 @@ const deleteWriter = async (id) => {
 };
 
 // export service 
+// add a post id to writer.posts (avoid duplicates)
+const addPost = async (writerId, postId) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(writerId)) throw new HttpError(400, 'Invalid writer id');
+    if (!mongoose.Types.ObjectId.isValid(postId)) throw new HttpError(400, 'Invalid post id');
+    const updated = await Writer.findByIdAndUpdate(
+      writerId,
+      { $addToSet: { posts: postId } },
+      { new: true }
+    ).exec();
+    if (!updated) throw new HttpError(404, 'Writer not found');
+    logger.info('Added post to writer', { writerId, postId });
+    return updated;
+  } catch (err) {
+    logger.error('addPost error', { writerId, postId, err });
+    throw err;
+  }
+};
+
+// remove a post id from writer.posts
+const removePost = async (writerId, postId) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(writerId)) throw new HttpError(400, 'Invalid writer id');
+    if (!mongoose.Types.ObjectId.isValid(postId)) throw new HttpError(400, 'Invalid post id');
+    const updated = await Writer.findByIdAndUpdate(
+      writerId,
+      { $pull: { posts: postId } },
+      { new: true }
+    ).exec();
+    if (!updated) throw new HttpError(404, 'Writer not found');
+    logger.info('Removed post from writer', { writerId, postId });
+    return updated;
+  } catch (err) {
+    logger.error('removePost error', { writerId, postId, err });
+    throw err;
+  }
+};
+
 module.exports = {
   createWriter,
   getWriters,
   getWriterById,
   updateWriter,
   deleteWriter,
+  addPost,
+  removePost,
 };

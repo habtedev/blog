@@ -2,6 +2,8 @@ const Blog = require('./blog.model');
 const logger = require('../../utils/logger');
 const mongoose = require('mongoose');
 const HttpError = require('../../utils/httpError');
+const draftService = require('./draft.service');
+const writerService = require('../writer/writer.service');
 
 //crete a new blog post
 const createPost = async (data) => {
@@ -99,6 +101,36 @@ const changePostStatus = async (id, status) => {
 		if (!mongoose.Types.ObjectId.isValid(id)) {
 			throw new HttpError(400, 'Invalid post id');
 		}
+		// If unpublishing (moving to draft) — move the blog into the Draft collection and remove the blog
+		if (status === 'draft') {
+			const blog = await Blog.findById(id).exec();
+			if (!blog) throw new HttpError(404, 'Post not found');
+
+			const payload = {
+				title: blog.title,
+				content: blog.content,
+				author: blog.author || null,
+				authorName: blog.authorName || 'Anonymous',
+				tags: blog.tags || [],
+				metadata: {},
+			};
+
+			const createdDraft = await draftService.createDraft(payload);
+			// attempt to remove this post id from the writer.posts list if author present
+			try {
+				if (blog.author && mongoose.Types.ObjectId.isValid(String(blog.author))) {
+					await writerService.removePost(String(blog.author), blog._id);
+				}
+			} catch (err) {
+				logger.error('Failed to remove post from writer on unpublish', { blogId: id, err });
+			}
+			// delete the blog post
+			await Blog.findByIdAndDelete(id).exec();
+			logger.info('Moved blog to draft', { blogId: id, draftId: createdDraft._id });
+			return createdDraft;
+		}
+
+		// Otherwise for publish/archived transitions, update the blog document in-place.
 		const data = { status };
 		data.published = status === 'published';
 		// set or clear publishedAt when status changes
